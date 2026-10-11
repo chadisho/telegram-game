@@ -1,55 +1,135 @@
 # Mench: Telegram Mini App
 
-A single-file game (`index.html`). No build step, no server code. It runs as a Telegram Mini App and also works in any normal browser.
+Mensch ärgere Dich nicht (Mench) for 2 to 4 players, as a Telegram Mini App.
 
-## What is inside
+- `index.html` is the whole game (works alone for play on one phone, or with the server for online play)
+- `server/` is the online game server (Node.js). It also serves `index.html`, so one domain is enough.
 
-- Mensch ärgere Dich nicht for 2 to 4 players, with human and computer seats
-- Persian and English, switchable in the app (Persian is chosen automatically for Telegram users whose language is Persian; the board stays left-to-right)
-- Telegram integration: full-height view, header color, haptic feedback, a native "Roll the dice" bottom button, swipe-down-to-close disabled while playing
-- The game is saved on the device after every turn and resumes when the app is reopened
-- Optional "Invite a friend" button (see step 4)
+## What the game does
 
-## 1. Host the file over HTTPS
+- Play on one phone against the computer or friends, or **online with friends** through a room link
+- Persian and English (chosen from the Telegram language, switchable in the app)
+- Telegram features: full-height view, haptic feedback, a native "Roll the dice" bottom button, invite button
+- Local games are saved after every turn and resume when the app is reopened
 
-This repository is already set up for **GitHub Pages**. The game is live at `https://chadisho.github.io/telegram-game/` (use this address in step 2). Any change pushed to `main` goes live within a minute or two.
+## How online play works
 
-Other options, if you ever move it:
+1. A player taps **Play online** and then **Create a room**. They get a 5-letter room code.
+2. They tap **Invite friends**. Telegram's share screen opens with a link like `https://t.me/See_Earth_bot/Mench?startapp=K7QWZ`.
+3. Friends tap the link, the Mini App opens and they are put straight into the room.
+4. The host can add computer players to empty seats, then taps **Start game**.
 
-Telegram only opens Mini Apps from an `https://` address with a valid certificate. Any static host works:
+The server rolls the dice and checks every move, so nobody can cheat. If a player closes the app, they can come back and continue. A player who disconnects, or does not move for 40 seconds, is played for by the computer for that turn. A player who leaves in the middle of a game is replaced by a computer.
 
-- **Cloudflare Pages**: create a project, upload the folder, done. You get `https://yourname.pages.dev`.
-- **GitHub Pages**: put `index.html` in a repository, turn on Pages in the repository settings.
-- **Netlify**: drag the folder onto app.netlify.com/drop.
-- **Your own server**: copy `index.html` to the web root of nginx or Caddy with a Let's Encrypt certificate.
+## Put the game server on your VPS (Ubuntu)
 
-Open the address in a normal browser first and check that the game loads.
+You need a domain or subdomain (for example `game.example.com`) with an **A record** pointing to the VPS address. Telegram only opens Mini Apps over HTTPS.
 
-## 2. Register it with @BotFather
+**1. Install the tools**
 
-1. In Telegram, open **@BotFather**.
-2. If you do not have a bot yet, send `/newbot` and follow the questions.
-3. Send `/newapp` and choose your bot.
-4. Answer the questions: title (for example `Mench`), short description, a 640x360 picture, an optional demo GIF (send `/empty` to skip), then the **HTTPS address from step 1**, then a short name (for example `mench`).
-5. BotFather replies with the direct link, for example `https://t.me/YourBot/mench`. Share this link anywhere; it opens the game.
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs git nginx certbot python3-certbot-nginx
+```
 
-Optional: to also open the game from the bot's menu button, send `/setmenubutton`, pick the bot, and give the same HTTPS address and a button label.
+**2. Get the game and install it**
 
-## 3. Test it
+```bash
+sudo git clone https://github.com/chadisho/telegram-game /opt/mench
+cd /opt/mench/server
+sudo npm install --omit=dev
+sudo chown -R www-data:www-data /opt/mench
+```
 
-Open the direct link on your phone and check:
+**3. Run it as a service**
 
-- the game fills the screen and the board is square
-- the yellow "ROLL THE DICE" bottom button appears on your turn
-- close the app in the middle of a game and reopen it: the game should continue
-- tap the language button and check the Persian text
+Create `/etc/systemd/system/mench.service`:
 
-## 4. Invite button
+```ini
+[Unit]
+Description=Mench game server
+After=network.target
 
-The "Invite a friend" button is already set to `https://t.me/See_Earth_bot/Mench`. To change it, edit the `SHARE_URL` line near the top of the script in `index.html`.
+[Service]
+WorkingDirectory=/opt/mench/server
+ExecStart=/usr/bin/node server.js
+Environment=PORT=8080
+Restart=always
+User=www-data
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now mench
+curl http://127.0.0.1:8080/health      # should print {"ok":true,"rooms":0}
+```
+
+**4. Put HTTPS in front of it**
+
+Create `/etc/nginx/sites-available/mench` (use your own domain):
+
+```nginx
+server {
+    listen 80;
+    server_name game.example.com;
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 3600s;
+    }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/mench /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d game.example.com
+```
+
+Open `https://game.example.com/` in a browser. The game should load, and **Play online** should work.
+
+**5. Point the Mini App at it**
+
+In @BotFather send `/myapps`, choose your bot and the app, and use **Edit Web App URL** to set `https://game.example.com/`. The game and the server are then on the same address, so nothing else needs changing.
+
+## Updating later
+
+```bash
+cd /opt/mench && sudo git pull && sudo systemctl restart mench
+```
+
+Rooms live in the server's memory, so a restart ends games that are in progress. Do updates when few people are playing.
+
+## Using GitHub Pages for the page instead (optional)
+
+You can keep the page on GitHub Pages and use the VPS only as the game server. Open `index.html` and set the server address near the top of the script:
+
+```js
+const SERVER_URL='wss://game.example.com';
+```
+
+Without `SERVER_URL` the Pages version has no **Play online** button (it still plays on one phone). Serving everything from the VPS, as above, is simpler.
+
+## Settings
+
+| Where | Setting | Meaning |
+|---|---|---|
+| `index.html` | `SHARE_URL` | Your Mini App link. Used for invite links. |
+| `index.html` | `SERVER_URL` | Game server address. Leave empty when the VPS serves the page. |
+| server environment | `PORT` | Port to listen on (default 8080) |
+| server environment | `MENCH_TURN_MS` | Time before an idle player is played for (default 40000) |
+| server environment | `MENCH_MAX_ROOMS` | Most rooms at once (default 500) |
 
 ## Notes
 
-- **Fonts.** The page loads fonts from Google Fonts. If those are blocked for some of your players, the game still works and falls back to the phone's own fonts. To make the look identical everywhere, download the Fredoka, Nunito and Vazirmatn font files, put them next to `index.html`, and replace the Google Fonts `<link>` with `@font-face` rules.
-- **Players take turns on one phone.** Seats set to "Player" share the same device. There is no online multiplayer; it would need a server to relay moves.
-- **No tracking.** The page stores only the saved game and the chosen language on the device (`localStorage`), and shows the Telegram first name on the first human player's card.
+- **Fonts.** The page loads fonts from Google Fonts. If Google is blocked for some players, the game falls back to the phone's own fonts and still works.
+- **Names are not verified.** The name shown to friends comes from Telegram but the server does not check Telegram's signature. That is fine for a casual game. Seats are tied to a random token kept on the player's phone, not to the name.
+- **No database.** Nothing is stored on the server except open rooms, and they are deleted 15 minutes after the last player leaves.
