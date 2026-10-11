@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#9fdcff">
+<title>Mench</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@500;700;800&family=Lalezar&family=Vazirmatn:wght@500;700&display=swap">
+<style>
+/* Layout: sticker-style toy board on the left, chunky control panel on the right; panel drops under the board on phones. */
+:root{
+  --ink:#26214d; --muted:#5d5a86;
+  --sky1:#9fdcff; --sky2:#d6c8ff; --paper:#ffffff; --soft:#f1f3ff;
+  --red:#ff4d6d; --blue:#3d8bff; --yellow:#ffc83d; --green:#2fcf7f;
+  --display:'Fredoka','Nunito',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --body:'Nunito',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --fa:'Lalezar','Vazirmatn',system-ui,sans-serif;
+}
+:root[lang="fa"]{
+  --display:'Vazirmatn','Fredoka',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;
+  --body:'Vazirmatn','Nunito',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html{overscroll-behavior:none}
+body{
+  margin:0;
+  background:radial-gradient(circle,rgba(255,255,255,.6) 2px,transparent 3px) 0 0/30px 30px,linear-gradient(160deg,var(--sky1),var(--sky2));
+  background-color:var(--sky1);
+  color:var(--ink);font-family:var(--body);font-weight:700;font-size:16px;line-height:1.45;
+  padding-inline:16px;
+  padding-block:calc(14px + env(safe-area-inset-top,0px)) calc(30px + env(safe-area-inset-bottom,0px));
+  min-height:100%;touch-action:manipulation;-webkit-user-select:none;user-select:none;
+}
+button{font:inherit;color:inherit}
+.wrap{max-width:1040px;margin-inline:auto;display:flex;flex-direction:column;gap:20px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.titlebox{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+h1{margin:0;font-family:var(--fa);font-weight:400;font-size:60px;line-height:1.05;color:#fff;text-shadow:0 5px 0 var(--ink),3px 3px 0 var(--ink),-3px 3px 0 var(--ink)}
+.sub{background:var(--paper);border:3px solid var(--ink);border-radius:999px;padding:3px 14px;font-family:'Fredoka','Nunito',system-ui,sans-serif;font-weight:600;font-size:14px;direction:ltr}
+.tools{display:flex;gap:10px;flex-wrap:wrap}
+.btn{background:var(--yellow);color:var(--ink);border:3px solid var(--ink);border-radius:16px;padding:8px 18px;font-family:var(--display);font-weight:600;font-size:16px;cursor:pointer;box-shadow:0 5px 0 var(--ink);transition:transform .08s,box-shadow .08s}
+.btn:hover:not(:disabled){transform:translateY(-1px)}
+.btn:active:not(:disabled){transform:translateY(4px);box-shadow:0 1px 0 var(--ink)}
+.btn.ghost{background:var(--paper)}
+.btn.big{font-size:20px;padding:11px 26px;background:var(--green)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,.pc:focus-visible,.die:focus-visible,summary:focus-visible{outline:4px solid var(--blue);outline-offset:3px}
+
+.game{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap}
+.boardcol{flex:1 1 440px;min-width:0;max-width:660px;width:100%}
+.panel{flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:16px}
+
+/* board (always left-to-right, even in Persian) */
+.board{position:relative;width:100%;aspect-ratio:1;background:var(--soft);border:4px solid var(--ink);border-radius:24px;box-shadow:0 8px 0 var(--ink);overflow:hidden;direction:ltr}
+.p0{--pc:var(--red)}.p1{--pc:var(--blue)}.p2{--pc:var(--yellow)}.p3{--pc:var(--green)}
+.cell{position:absolute}
+.cell::before{content:"";position:absolute;inset:9%;border-radius:50%;background:var(--paper);border:2.5px solid var(--ink)}
+.cell.start::before{background:var(--pc)}
+.cell.start::after{content:"";position:absolute;inset:27%;background:var(--paper);clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)}
+.cell.home::before{background:color-mix(in srgb,var(--pc) 45%,#fff)}
+.cell.slot::before{background:var(--paper);box-shadow:inset 0 4px 0 rgba(38,33,77,.18)}
+.yard{position:absolute;border-radius:22%;background:var(--pc);border:3px solid var(--ink);box-shadow:inset 0 0 0 9px color-mix(in srgb,var(--pc) 55%,#fff)}
+.yard.off{opacity:.28;filter:grayscale(.7)}
+.hub{position:absolute;border-radius:50%;background:conic-gradient(var(--red) 0 25%,var(--blue) 0 50%,var(--yellow) 0 75%,var(--green) 0);transform:scale(.72);border:4px solid var(--ink)}
+.dest{position:absolute;pointer-events:none;z-index:1}
+.dest::after{content:"";position:absolute;inset:8%;border-radius:50%;background:color-mix(in srgb,var(--pc) 40%,transparent);border:3px dashed var(--ink);animation:spin 6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* pawns */
+.pc{position:absolute;z-index:2;display:grid;place-items:center;padding:0;border:0;background:none;cursor:default;transition:left .15s ease,top .15s ease;filter:drop-shadow(0 3px 0 rgba(38,33,77,.3))}
+.pc i{position:relative;display:block;width:100%;height:100%;transform:translateY(-6%) scale(1.12)}
+.pc i::before{content:"";position:absolute;left:22%;width:56%;top:36%;height:50%;border-radius:50% 50% 16% 16%/70% 70% 16% 16%;border:2.5px solid var(--ink);background:linear-gradient(90deg,color-mix(in srgb,var(--pc) 55%,#fff),var(--pc) 48%,color-mix(in srgb,var(--pc) 78%,#000))}
+.pc i::after{content:"";position:absolute;left:29%;width:42%;top:9%;height:42%;border-radius:50%;border:2.5px solid var(--ink);background:radial-gradient(circle at 35% 30%,color-mix(in srgb,var(--pc) 40%,#fff),var(--pc) 65%)}
+.pc.can{cursor:pointer;z-index:4;animation:hop .55s ease-in-out infinite alternate}
+.pc.can::before{content:"";position:absolute;inset:2%;border-radius:50%;background:rgba(255,255,255,.92);border:3px solid var(--ink);animation:ring .55s ease-in-out infinite alternate}
+.pc.moving{z-index:6}
+@keyframes hop{to{transform:translateY(-14%)}}
+@keyframes ring{to{transform:scale(1.12)}}
+
+.toast{position:absolute;left:50%;top:50%;z-index:8;transform:translate(-50%,-50%);background:var(--paper);border:3px solid var(--ink);border-radius:999px;padding:7px 18px;font-family:var(--display);font-weight:600;font-size:clamp(15px,3.6vw,22px);white-space:nowrap;box-shadow:0 5px 0 var(--ink);pointer-events:none;animation:pop .35s cubic-bezier(.3,1.6,.5,1)}
+@keyframes pop{from{transform:translate(-50%,-50%) scale(.3);opacity:0}}
+.winbox{position:absolute;inset:0;z-index:9;display:grid;place-items:center;background:rgba(38,33,77,.55)}
+.wincard{background:var(--paper);border:4px solid var(--ink);border-radius:24px;box-shadow:0 8px 0 var(--ink);padding:22px 28px;text-align:center;max-width:88%;animation:winpop .5s cubic-bezier(.3,1.6,.5,1)}
+@keyframes winpop{from{transform:scale(.3);opacity:0}}
+.wincard h3{margin:0 0 4px;font-family:var(--display);font-size:clamp(28px,7vw,44px);line-height:1.2;color:var(--pc);-webkit-text-stroke:2px var(--ink);paint-order:stroke fill}
+.wincard p{margin:0 0 14px}
+
+/* panel */
+.card{background:var(--paper);border:3px solid var(--ink);border-radius:20px;padding:14px 16px;box-shadow:0 5px 0 rgba(38,33,77,.25)}
+.card.main{box-shadow:0 6px 0 var(--ink)}
+.turn{display:flex;align-items:center;gap:18px}
+.diebox{flex:none;display:flex;flex-direction:column;align-items:center;gap:8px;width:112px}
+.die{width:100px;height:100px;border-radius:24px;background:var(--paper);border:4px solid var(--ink);box-shadow:0 7px 0 var(--pc);display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);place-items:center;padding:15px;cursor:pointer;direction:ltr}
+.die:disabled{cursor:default}
+.die:not(:disabled){animation:wiggle 1.2s ease-in-out infinite}
+.pip{width:17px;height:17px;border-radius:50%;background:transparent}
+.pip.on{background:var(--ink)}
+.die.rolling{animation:tumble .3s linear infinite}
+@keyframes wiggle{0%,100%{transform:rotate(0)}30%{transform:rotate(-6deg) translateY(-3px)}60%{transform:rotate(6deg)}}
+@keyframes tumble{0%{transform:rotate(0) translateY(0)}50%{transform:rotate(180deg) translateY(-10px)}100%{transform:rotate(360deg) translateY(0)}}
+.dielabel{font-family:var(--display);font-weight:600;font-size:14px;color:var(--muted);text-align:center;min-height:22px;line-height:1.3}
+.status{min-width:0;font-family:var(--display);font-weight:600;font-size:23px;line-height:1.3}
+.hint{font-family:var(--body);font-weight:700;color:var(--muted);font-size:15px;margin-top:6px;line-height:1.4}
+.chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px}
+.chip{display:flex;align-items:center;gap:10px;background:var(--paper);border:3px solid var(--ink);border-radius:16px;padding:8px 10px;min-width:0;box-shadow:0 4px 0 rgba(38,33,77,.25)}
+.chip.now{background:color-mix(in srgb,var(--pc) 35%,#fff);box-shadow:0 4px 0 var(--ink);transform:translateY(-2px)}
+.avatar{flex:none;width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 35% 30%,color-mix(in srgb,var(--pc) 40%,#fff),var(--pc) 65%);border:3px solid var(--ink)}
+.who{min-width:0;line-height:1.2}
+.who b{display:block;font-family:var(--display);font-weight:600;font-size:17px}
+.who small{display:block;color:var(--muted);font-size:12px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stars{margin-inline-start:auto;display:flex;gap:3px}
+.stars s{width:10px;height:10px;border-radius:50%;border:2px solid var(--ink);background:var(--paper);text-decoration:none}
+.stars s.on{background:var(--pc)}
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted)}
+.log li:first-child{color:var(--ink)}
+h2{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 8px}
+.seat{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.seat label{flex:1;display:flex;align-items:center;gap:10px;font-family:var(--display);font-weight:600;font-size:18px}
+select{font:inherit;font-weight:700;color:var(--ink);background:var(--soft);border:3px solid var(--ink);border-radius:12px;padding:6px 10px}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.warn{color:#c4244a;font-size:14px;margin:4px 0 0}
+details summary{cursor:pointer;font-family:var(--display);font-weight:600;font-size:18px}
+details ol{margin:10px 0 0;padding-inline-start:22px;font-size:15px;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+details ol li::marker{color:var(--ink);font-family:var(--display);font-weight:700}
+.confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:50}
+.confetti span{position:absolute;top:-24px;border-radius:3px;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(112vh) rotate(720deg)}}
+@media (max-width:520px){
+  h1{font-size:50px}
+  .btn{padding:6px 14px;font-size:15px}
+  .turn{gap:12px}
+  .status{font-size:20px}
+}
+@media (prefers-reduced-motion:reduce){
+  .pc.can,.pc.can::before,.dest::after,.die:not(:disabled),.die.rolling,.toast,.wincard{animation:none}
+  .pc{transition:none}
+  .confetti{display:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="titlebox">
+      <h1 lang="fa" dir="rtl">منچ</h1>
+      <span class="sub">Mensch ärgere Dich nicht</span>
+    </div>
+    <div class="tools">
+      <button class="btn ghost" id="langBtn" type="button"></button>
+      <button class="btn ghost" id="soundBtn" type="button" aria-pressed="true"></button>
+      <button class="btn ghost" id="shareBtn" type="button" data-i18n="share" hidden></button>
+      <button class="btn" id="newBtn" type="button" data-i18n="newGame"></button>
+    </div>
+  </header>
+
+  <div class="game">
+    <div class="boardcol"><div class="board" id="board" role="group"></div></div>
+
+    <div class="panel">
+      <section class="card main" id="setup" hidden>
+        <h2 data-i18n="whoPlaying"></h2>
+        <div id="seats"></div>
+        <p class="warn" id="seatWarn" hidden data-i18n="pickTwo"></p>
+        <div class="row">
+          <button class="btn big" id="startBtn" type="button" data-i18n="letsPlay"></button>
+          <button class="btn ghost" id="cancelBtn" type="button" data-i18n="cancel"></button>
+        </div>
+      </section>
+
+      <section class="card main turn" id="turn">
+        <div class="diebox">
+          <button class="die" id="die" type="button"></button>
+          <div class="dielabel" id="dieLabel"></div>
+        </div>
+        <div class="status" id="status" aria-live="polite"></div>
+      </section>
+
+      <div class="chips" id="chips"></div>
+
+      <section class="card">
+        <h2 data-i18n="logHead"></h2>
+        <ul class="log" id="log"></ul>
+      </section>
+
+      <section class="card">
+        <details>
+          <summary data-i18n="howTo"></summary>
+          <ol>
+            <li data-i18n="r1"></li>
+            <li data-i18n="r2"></li>
+            <li data-i18n="r3"></li>
+            <li data-i18n="r4"></li>
+            <li data-i18n="r5"></li>
+            <li data-i18n="r6"></li>
+          </ol>
+        </details>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=>{
+/* ---------- settings you can change before release ---------- */
+// Your Mini App link from BotFather, e.g. 'https://t.me/YourBot/mench'. Leave empty to hide the invite button.
+const SHARE_URL='';
+
+/* ---------- Telegram ---------- */
+const tg=window.Telegram&&window.Telegram.WebApp;
+const tgUser=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;
+if(tg){
+  try{tg.ready();tg.expand()}catch(e){}
+  try{if(tg.disableVerticalSwipes)tg.disableVerticalSwipes()}catch(e){}
+  try{if(tg.isVersionAtLeast&&tg.isVersionAtLeast('6.9')){tg.setHeaderColor('#9fdcff');tg.setBackgroundColor('#9fdcff')}}catch(e){}
+}
+const mb=tg&&tg.MainButton,hp=tg&&tg.HapticFeedback;
+function hap(kind,v){
+  try{
+    if(!hp)return;
+    if(kind==='i')hp.impactOccurred(v||'light');
+    else if(kind==='n')hp.notificationOccurred(v);
+    else hp.selectionChanged();
+  }catch(e){}
+}
+
+/* ---------- text ---------- */
+const NAMES_L={en:['Red','Blue','Yellow','Green'],fa:['قرمز','آبی','زرد','سبز']};
+const I18N={
+en:{
+  share:'Invite a friend',newGame:'New game',soundOn:'Sound: on',soundOff:'Sound: off',
+  whoPlaying:'Who is playing?',player:'Player',computer:'Computer',off:'Not playing',
+  pickTwo:'Pick at least two players.',letsPlay:"Let's play!",cancel:'Cancel',
+  dieAria:'Roll the die',tapRoll:'Tap to roll!',
+  yourTurn:'Your turn, {n}!',rolling:'{n} is rolling…',tapDice:'Tap the dice to roll.',
+  noPieces:'No pieces out yet. Try {a} of 3 to roll a 6!',
+  youRolled:'You rolled a {d}!',theyRolled:'{n} rolled a {d}.',
+  tapPiece:'Tap a bouncing piece to move it.',moving:'Moving your piece…',thinking:'Thinking…',
+  wins:'{n} wins!',winHint:'What a game! Start a new one any time.',winBody:'All four pieces made it home!',again:'Play again',
+  logHead:'What just happened',howTo:'How to play',
+  r1:'Roll a 6 to wake up a piece and put it on your star. If all your pieces are asleep in the yard, you get 3 tries.',
+  r2:'Move your pieces around the board, the way the clock goes.',
+  r3:'Land on another color and that piece goes back to its yard.',
+  r4:'Roll a 6? You get to roll again!',
+  r5:'Take a full lap, then walk into your home row. You need the exact number to fit.',
+  r6:'Fill all four home circles first and you win.',
+  tSix:'A 6! Roll again!',tNoMove:'No move this time',tOut:'{n} is out!',tAlmost:'Almost home!',tBonk:'Bonk! {m} goes home',
+  lRolled:'{n} rolled a {d}',lWoke:'{n} woke up a piece',lHomeRow:'{n} walked into the home row',
+  lSent:'{n} sent a {m} piece home',lAgain:'{n} gets another roll',lNew:'New game! {n} goes first',lResume:'Welcome back! Game continues.',
+  mainBtn:'ROLL THE DICE',shareText:'Come play Mench with me!',pieceAria:'{n} piece {a}',boardAria:'Game board'
+},
+fa:{
+  share:'دعوت دوست',newGame:'بازی جدید',soundOn:'صدا: روشن',soundOff:'صدا: خاموش',
+  whoPlaying:'چه کسانی بازی می‌کنند؟',player:'بازیکن',computer:'کامپیوتر',off:'بازی نمی‌کند',
+  pickTwo:'حداقل دو بازیکن انتخاب کنید.',letsPlay:'شروع بازی!',cancel:'انصراف',
+  dieAria:'انداختن تاس',tapRoll:'بزن تا تاس بیفتد!',
+  yourTurn:'نوبت توست، {n}!',rolling:'{n} تاس می‌اندازد…',tapDice:'روی تاس بزن.',
+  noPieces:'هنوز مهره‌ای بیرون نیست. شانس {a} از ۳ برای آوردن ۶!',
+  youRolled:'تاس آمد {d}!',theyRolled:'{n} تاس {d} آورد.',
+  tapPiece:'روی مهرهٔ پرنده بزن تا حرکت کند.',moving:'مهره در حال حرکت…',thinking:'در حال فکر…',
+  wins:'{n} برنده شد!',winHint:'چه بازی‌ای! هر وقت خواستی دوباره بازی کن.',winBody:'هر چهار مهره به خانه رسیدند!',again:'بازی دوباره',
+  logHead:'چه اتفاقی افتاد',howTo:'راهنمای بازی',
+  r1:'برای بیرون آوردن یک مهره روی ستارهٔ خودت باید ۶ بیاوری. اگر همهٔ مهره‌هایت در خانه خوابیده‌اند، ۳ بار شانس داری.',
+  r2:'مهره‌ها را در جهت عقربه‌های ساعت دور تخته بچرخان.',
+  r3:'روی مهرهٔ رنگ دیگری بیفتی، آن مهره به خانهٔ خودش برمی‌گردد.',
+  r4:'شش آوردی؟ یک بار دیگر تاس بنداز!',
+  r5:'یک دور کامل بزن و وارد خانهٔ نهایی شو. برای رسیدن به آخرین خانه باید عدد دقیق بیاوری.',
+  r6:'هر کس زودتر هر چهار مهره‌اش را به خانهٔ نهایی برساند برنده است.',
+  tSix:'شش! دوباره بنداز!',tNoMove:'این بار حرکتی نیست',tOut:'مهرهٔ {n} بیرون آمد!',tAlmost:'نزدیک خانه!',tBonk:'بونک! مهرهٔ {m} برگشت',
+  lRolled:'{n} تاس {d} آورد',lWoke:'{n} یک مهره را بیرون آورد',lHomeRow:'{n} وارد خانهٔ نهایی شد',
+  lSent:'{n} مهرهٔ {m} را برگرداند',lAgain:'{n} دوباره تاس می‌اندازد',lNew:'بازی جدید! {n} شروع می‌کند',lResume:'خوش برگشتی! بازی ادامه دارد.',
+  mainBtn:'تاس بنداز',shareText:'بیا با هم منچ بازی کنیم!',pieceAria:'مهرهٔ {n} شمارهٔ {a}',boardAria:'تختهٔ بازی'
+}};
+let lang='en';
+try{
+  const saved=localStorage.getItem('mench.lang');
+  const code=(tgUser&&tgUser.language_code)||navigator.language||'en';
+  lang=saved==='fa'||saved==='en'?saved:(String(code).toLowerCase().startsWith('fa')?'fa':'en');
+}catch(e){}
+const FA_DIGITS='۰۱۲۳۴۵۶۷۸۹';
+const num=x=>lang==='fa'?String(x).replace(/\d/g,d=>FA_DIGITS[d]):String(x);
+const NAMES=()=>NAMES_L[lang];
+function t(k,v={}){
+  const s=(I18N[lang][k]!==undefined?I18N[lang][k]:(I18N.en[k]!==undefined?I18N.en[k]:k));
+  return s.replace(/\{(\w+)\}/g,(_,key)=>(key==='n'||key==='m')?NAMES()[v[key]]:num(v[key]));
+}
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- board data ---------- */
+const U=100/11;
+const HEX=['#ff4d6d','#3d8bff','#ffc83d','#2fcf7f'];
+const START=[0,10,20,30];
+const TRACK=[[0,4],[1,4],[2,4],[3,4],[4,4],[4,3],[4,2],[4,1],[4,0],[5,0],[6,0],[6,1],[6,2],[6,3],[6,4],[7,4],[8,4],[9,4],[10,4],[10,5],[10,6],[9,6],[8,6],[7,6],[6,6],[6,7],[6,8],[6,9],[6,10],[5,10],[4,10],[4,9],[4,8],[4,7],[4,6],[3,6],[2,6],[1,6],[0,6],[0,5]];
+const HOME=[[[1,5],[2,5],[3,5],[4,5]],[[5,1],[5,2],[5,3],[5,4]],[[9,5],[8,5],[7,5],[6,5]],[[5,9],[5,8],[5,7],[5,6]]];
+const YARD=[[[1,1],[2,1],[1,2],[2,2]],[[8,1],[9,1],[8,2],[9,2]],[[8,8],[9,8],[8,9],[9,9]],[[1,8],[2,8],[1,9],[2,9]]];
+const YARDBOX=[[0,0],[7,0],[7,7],[0,7]];
+const PIPS={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+
+const $=id=>document.getElementById(id);
+const boardEl=$('board'),dieEl=$('die'),statusEl=$('status'),chipsEl=$('chips'),logEl=$('log'),dieLabel=$('dieLabel');
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const rnd=n=>1+Math.floor(Math.random()*n);
+const reduce=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+let seats=['human','cpu','cpu','cpu'];
+let S=null,busy=false,counter=0,toastEl,winEl,toastTimer=null;
+const pcEls=[[],[],[],[]];
+let destEls=[];
+
+/* ---------- sound ---------- */
+let ac=null,muted=false;
+function tone(f,d=.1,type='sine',v=.12,delay=0){
+  if(muted)return;
+  try{
+    ac=ac||new (window.AudioContext||window.webkitAudioContext)();
+    if(ac.state==='suspended')ac.resume();
+    const at=ac.currentTime+delay,o=ac.createOscillator(),g=ac.createGain();
+    o.type=type;o.frequency.value=f;
+    g.gain.setValueAtTime(v,at);g.gain.exponentialRampToValueAtTime(.001,at+d);
+    o.connect(g);g.connect(ac.destination);o.start(at);o.stop(at+d+.02);
+  }catch(e){}
+}
+const sfx={
+  tick:()=>tone(300+rnd(6)*50,.04,'square',.04),
+  hop:k=>tone(480+k*18,.07,'triangle',.1),
+  out:()=>{tone(523,.1,'triangle');tone(784,.14,'triangle',.12,.09)},
+  six:()=>{[523,659,784,1047].forEach((f,k)=>tone(f,.12,'triangle',.12,k*.07))},
+  bonk:()=>{tone(320,.12,'sawtooth',.1);tone(200,.2,'sawtooth',.1,.1)},
+  home:()=>{tone(659,.1,'triangle');tone(880,.2,'triangle',.12,.1)},
+  win:()=>{[523,659,784,1047,784,1047,1319].forEach((f,k)=>tone(f,.18,'triangle',.13,k*.12))}
+};
+
+/* ---------- small UI helpers ---------- */
+function toast(msg,ms=1500){
+  toastEl.textContent=msg;toastEl.hidden=false;
+  toastEl.style.animation='none';void toastEl.offsetWidth;toastEl.style.animation='';
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{toastEl.hidden=true},ms);
+}
+function confetti(){
+  if(reduce)return;
+  const box=document.createElement('div');box.className='confetti';
+  for(let k=0;k<80;k++){
+    const s=document.createElement('span');
+    s.style.left=Math.random()*100+'%';
+    s.style.width=(6+Math.random()*8)+'px';s.style.height=(10+Math.random()*10)+'px';
+    s.style.background=HEX[k%4];
+    s.style.animationDuration=(2.6+Math.random()*2.6)+'s';
+    s.style.animationDelay=(Math.random()*1.2)+'s';
+    box.appendChild(s);
+  }
+  document.body.appendChild(box);setTimeout(()=>box.remove(),7500);
+}
+function place(el,c,r,w=1,h=1){
+  el.style.left=(c*U)+'%';el.style.top=(r*U)+'%';el.style.width=(w*U)+'%';el.style.height=(h*U)+'%';
+}
+function mk(cls,c,r,w,h){const d=document.createElement('div');d.className=cls;place(d,c,r,w,h);boardEl.appendChild(d);return d}
+
+function buildBoard(){
+  boardEl.innerHTML='';
+  for(let p=0;p<4;p++){
+    mk('yard p'+p,YARDBOX[p][0],YARDBOX[p][1],4,4).dataset.yard=p;
+    YARD[p].forEach(([c,r])=>mk('cell slot p'+p,c,r));
+    HOME[p].forEach(([c,r])=>mk('cell home p'+p,c,r));
+  }
+  TRACK.forEach(([c,r],k)=>{
+    const sp=START.indexOf(k);
+    mk('cell'+(sp>=0?' start p'+sp:''),c,r);
+  });
+  mk('hub',4,4,3,3);
+  for(let p=0;p<4;p++)for(let i=0;i<4;i++){
+    const b=document.createElement('button');
+    b.type='button';b.className='pc p'+p;b.disabled=true;
+    b.innerHTML='<i></i>';
+    b.style.width=U+'%';b.style.height=U+'%';
+    b.addEventListener('click',()=>onPiece(p,i));
+    boardEl.appendChild(b);pcEls[p][i]=b;
+  }
+  toastEl=document.createElement('div');toastEl.className='toast';toastEl.hidden=true;boardEl.appendChild(toastEl);
+  winEl=document.createElement('div');winEl.className='winbox';winEl.hidden=true;
+  winEl.innerHTML='<div class="wincard"><h3 id="winTitle"></h3><p data-i18n="winBody"></p><button class="btn big" id="againBtn" type="button" data-i18n="again"></button></div>';
+  boardEl.appendChild(winEl);
+  $('againBtn').addEventListener('click',()=>newGame());
+  dieEl.innerHTML='';
+  for(let k=0;k<9;k++){const s=document.createElement('span');s.className='pip';dieEl.appendChild(s)}
+}
+
+function cellOf(p,i){
+  const r=S.pieces[p][i];
+  if(r<0)return YARD[p][i];
+  if(r<40)return TRACK[(START[p]+r)%40];
+  return HOME[p][r-40];
+}
+function setPos(p,i){const [c,r]=cellOf(p,i),e=pcEls[p][i];e.style.left=(c*U)+'%';e.style.top=(r*U)+'%'}
+function showFace(d){[...dieEl.children].forEach((s,k)=>s.classList.toggle('on',PIPS[d].includes(k)))}
+function renderLog(){logEl.innerHTML=S.log.map(e=>'<li>'+esc(t(e[0],e[1]))+'</li>').join('')}
+function log(k,v){S.log.unshift([k,v||{}]);S.log=S.log.slice(0,5);renderLog()}
+const active=()=>[0,1,2,3].filter(p=>seats[p]);
+
+/* ---------- rules ---------- */
+function legal(p,d){
+  const pcs=S.pieces[p],has=r=>pcs.includes(r),yardI=pcs.indexOf(-1),mv=[];
+  pcs.forEach((r,i)=>{
+    if(r===-1){if(d===6&&!has(0)&&i===yardI)mv.push({i,to:0})}
+    else if(r+d<=43&&!has(r+d))mv.push({i,to:r+d});
+  });
+  if(yardI>=0){
+    if(has(0)){const c=mv.filter(m=>pcs[m.i]===0);if(c.length)return c}
+    else if(d===6){const e=mv.filter(m=>pcs[m.i]===-1);if(e.length)return e}
+  }
+  return mv;
+}
+function canThree(p){
+  const pcs=S.pieces[p],h=pcs.filter(r=>r>=40).sort((a,b)=>b-a);
+  return pcs.every(r=>r===-1||r>=40)&&h.every((r,k)=>r===43-k);
+}
+
+/* ---------- saving ---------- */
+const KEY='mench.v1';
+function save(){
+  try{
+    if(S.over){localStorage.removeItem(KEY);return}
+    localStorage.setItem(KEY,JSON.stringify({seats,pieces:S.pieces,turn:S.turn,tries:S.tries,log:S.log}));
+  }catch(e){}
+}
+function load(){
+  try{
+    const d=JSON.parse(localStorage.getItem(KEY));
+    if(!d||!Array.isArray(d.seats)||d.seats.length!==4||!Array.isArray(d.pieces)||d.pieces.length!==4)return null;
+    if(!d.seats.every(s=>s===null||s==='human'||s==='cpu'))return null;
+    if(d.seats.filter(Boolean).length<2||!d.seats[d.turn])return null;
+    const okPieces=d.pieces.every(row=>Array.isArray(row)&&row.length===4&&row.every(r=>Number.isInteger(r)&&r>=-1&&r<=43));
+    if(!okPieces)return null;
+    if(d.pieces.some(row=>row.every(r=>r>=40)))return null;
+    return d;
+  }catch(e){return null}
+}
+
+/* ---------- Telegram main button ---------- */
+function syncMain(){
+  if(!mb)return;
+  try{
+    const show=!S.over&&seats[S.turn]==='human'&&S.phase==='roll'&&!busy;
+    if(show){mb.setParams({text:t('mainBtn'),color:'#ffc83d',text_color:'#26214d'});mb.show()}
+    else mb.hide();
+  }catch(e){}
+}
+function humanRoll(){if(S&&seats[S.turn]==='human')roll()}
+if(mb){try{mb.onClick(humanRoll)}catch(e){}}
+
+/* ---------- screen ---------- */
+function updateUI(){
+  const p=S.turn,human=seats[p]==='human';
+  dieEl.className='die p'+p+(dieEl.classList.contains('rolling')?' rolling':'');
+  dieEl.disabled=!(human&&S.phase==='roll'&&!busy&&!S.over);
+  dieLabel.textContent=S.over?'':(human&&S.phase==='roll'&&!busy?t('tapRoll'):(!human?t('computer'):''));
+  let head='',hint='';
+  if(S.over){head=t('wins',{n:p});hint=t('winHint')}
+  else if(S.phase==='roll'){
+    head=human?t('yourTurn',{n:p}):t('rolling',{n:p});
+    if(human)hint=t('tapDice');
+    if(canThree(p))hint=t('noPieces',{a:S.tries+1});
+  }else if(S.phase==='move'){
+    head=human?t('youRolled',{d:S.die}):t('theyRolled',{n:p,d:S.die});
+    hint=human?(S.moves.length>1?t('tapPiece'):t('moving')):t('thinking');
+  }else head=t('theyRolled',{n:p,d:S.die});
+  statusEl.innerHTML=esc(head)+(hint?'<div class="hint">'+esc(hint)+'</div>':'');
+  const firstHuman=active().find(q=>seats[q]==='human');
+  chipsEl.innerHTML=active().map(q=>{
+    const home=S.pieces[q].filter(r=>r>=40).length;
+    const stars=[0,1,2,3].map(k=>'<s class="'+(k<home?'on':'')+'"></s>').join('');
+    const role=seats[q]==='cpu'?t('computer'):(q===firstHuman&&tgUser&&tgUser.first_name?tgUser.first_name:t('player'));
+    return '<div class="chip p'+q+(q===p&&!S.over?' now':'')+'"><span class="avatar"></span><div class="who"><b>'+esc(NAMES()[q])+'</b><small>'+esc(role)+'</small></div><span class="stars">'+stars+'</span></div>';
+  }).join('');
+  destEls.forEach(e=>e.remove());destEls=[];
+  for(let q=0;q<4;q++)for(let i=0;i<4;i++){pcEls[q][i].classList.remove('can');pcEls[q][i].disabled=true}
+  if(S.phase==='move'&&human&&!busy&&!S.over){
+    const seen=new Set();
+    S.moves.forEach(m=>{
+      const was=S.pieces[p][m.i];
+      for(let i=0;i<4;i++){if(was===-1?S.pieces[p][i]===-1:i===m.i){pcEls[p][i].classList.add('can');pcEls[p][i].disabled=false}}
+      const to=m.to<40?TRACK[(START[p]+m.to)%40]:HOME[p][m.to-40];
+      const key=to.join(',');
+      if(!seen.has(key)){seen.add(key);destEls.push(mk('dest p'+p,to[0],to[1]))}
+    });
+  }
+  if(!busy&&(S.phase==='roll'||S.over))save();
+  syncMain();
+}
+
+/* ---------- turns ---------- */
+function autoCpu(){
+  const id=S.id;
+  if(S.over||S.phase!=='roll'||seats[S.turn]!=='cpu')return;
+  setTimeout(()=>{if(S&&S.id===id)roll()},900);
+}
+
+async function roll(){
+  if(!S||busy||S.phase!=='roll'||S.over)return;
+  const id=S.id;busy=true;dieEl.classList.add('rolling');updateUI();
+  for(let k=0;k<9;k++){showFace(rnd(6));sfx.tick();if(k%2===0)hap('s');await sleep(75);if(S.id!==id)return}
+  const d=rnd(6);showFace(d);dieEl.classList.remove('rolling');hap('i','medium');
+  S.die=d;S.tries++;busy=false;
+  const p=S.turn;
+  S.moves=legal(p,d);
+  log('lRolled',{n:p,d});
+  if(S.moves.length){
+    S.phase='move';updateUI();
+    if(seats[p]==='cpu')setTimeout(()=>{if(S.id===id)doMove(cpuPick(p,S.moves))},850);
+    else if(S.moves.length===1)setTimeout(()=>{if(S.id===id&&S.phase==='move')doMove(S.moves[0])},650);
+    return;
+  }
+  S.phase='idle';updateUI();
+  toast(d===6?t('tSix'):t('tNoMove'));
+  await sleep(1000);if(S.id!==id)return;
+  if(d===6){S.tries=0;S.phase='roll';sfx.six();updateUI();autoCpu()}
+  else if(canThree(p)&&S.tries<3){S.phase='roll';updateUI();autoCpu()}
+  else nextTurn();
+}
+
+function onPiece(p,i){
+  if(S.phase!=='move'||busy||seats[S.turn]!=='human'||p!==S.turn)return;
+  let m=S.moves.find(x=>x.i===i);
+  if(!m&&S.pieces[p][i]===-1)m=S.moves.find(x=>S.pieces[p][x.i]===-1);
+  if(m)doMove(m);
+}
+
+async function doMove(m){
+  if(busy||S.over)return;
+  const id=S.id,p=S.turn,i=m.i,from=S.pieces[p][i],el=pcEls[p][i];
+  busy=true;S.phase='anim';updateUI();el.classList.add('moving');
+  const path=from===-1?[0]:Array.from({length:m.to-from},(_,k)=>from+1+k);
+  let k=0;
+  for(const r of path){S.pieces[p][i]=r;setPos(p,i);sfx.hop(k++);hap('i','light');await sleep(160);if(S.id!==id)return}
+  el.classList.remove('moving');
+  if(from===-1){log('lWoke',{n:p});toast(t('tOut',{n:p}));sfx.out();hap('i','medium')}
+  else if(m.to>=40&&from<40){log('lHomeRow',{n:p});toast(t('tAlmost'));sfx.home();hap('n','success')}
+  if(m.to<40){
+    const a=(START[p]+m.to)%40;
+    for(let q=0;q<4;q++){
+      if(q===p||!seats[q])continue;
+      for(let j=0;j<4;j++){
+        const r=S.pieces[q][j];
+        if(r>=0&&r<40&&(START[q]+r)%40===a){
+          S.pieces[q][j]=-1;setPos(q,j);
+          log('lSent',{n:p,m:q});toast(t('tBonk',{m:q}));sfx.bonk();hap('n','warning');
+        }
+      }
+    }
+  }
+  busy=false;
+  if(S.pieces[p].every(r=>r>=40)){S.over=true;S.phase='over';S.winner=p;updateUI();showWin(p);return}
+  if(S.die===6){S.tries=0;S.phase='roll';log('lAgain',{n:p});toast(t('tSix'));sfx.six();hap('i','heavy');updateUI();autoCpu()}
+  else nextTurn();
+}
+
+function showWin(p){
+  winEl.className='winbox p'+p;
+  $('winTitle').textContent=t('wins',{n:p});
+  winEl.hidden=false;sfx.win();hap('n','success');confetti();
+}
+
+function nextTurn(){
+  const a=active();S.turn=a[(a.indexOf(S.turn)+1)%a.length];
+  S.tries=0;S.phase='roll';busy=false;updateUI();autoCpu();
+}
+
+/* ---------- computer player ---------- */
+function danger(p,a){
+  let n=0;
+  for(let q=0;q<4;q++){
+    if(q===p||!seats[q])continue;
+    S.pieces[q].forEach(r=>{if(r>=0&&r<40){const d=(a-(START[q]+r)%40+40)%40;if(d>=1&&d<=6)n++}});
+  }
+  return n;
+}
+function cpuPick(p,moves){
+  let best=null,bs=-1e9;
+  moves.forEach(m=>{
+    const r=S.pieces[p][m.i];let s=m.to;
+    if(r===-1)s+=60;
+    if(r===0)s+=25;
+    if(m.to>=40)s+=45;
+    if(r>=0&&r<40&&danger(p,(START[p]+r)%40)>0)s+=12;
+    if(m.to<40){
+      const a=(START[p]+m.to)%40;
+      for(let q=0;q<4;q++){
+        if(q===p||!seats[q])continue;
+        S.pieces[q].forEach(rr=>{if(rr>=0&&rr<40&&(START[q]+rr)%40===a)s+=100+rr});
+      }
+      s-=22*danger(p,a);
+    }
+    s+=Math.random()*3;
+    if(s>bs){bs=s;best=m}
+  });
+  return best;
+}
+
+/* ---------- new / resumed game ---------- */
+function newGame(resume){
+  let first;
+  if(resume){seats=resume.seats;first=resume.turn}
+  else first=active()[0];
+  S={
+    id:++counter,
+    pieces:resume?resume.pieces.map(r=>r.slice()):[[-1,-1,-1,-1],[-1,-1,-1,-1],[-1,-1,-1,-1],[-1,-1,-1,-1]],
+    turn:first,phase:'roll',die:1,tries:resume?(resume.tries||0):0,moves:[],over:false,winner:null,
+    log:resume&&Array.isArray(resume.log)?resume.log.filter(e=>Array.isArray(e)&&typeof e[0]==='string'):[]
+  };
+  busy=false;winEl.hidden=true;toastEl.hidden=true;
+  for(let p=0;p<4;p++){
+    document.querySelector('.yard[data-yard="'+p+'"]').classList.toggle('off',!seats[p]);
+    for(let i=0;i<4;i++){pcEls[p][i].style.display=seats[p]?'':'none';setPos(p,i)}
+  }
+  dieEl.classList.remove('rolling');showFace(1);
+  log(resume?'lResume':'lNew',{n:first});
+  updateUI();autoCpu();
+}
+
+/* ---------- setup panel, language, sound, share ---------- */
+const seatsEl=$('seats'),setupEl=$('setup');
+function buildSetup(){
+  const cur=[0,1,2,3].map(p=>{const el=$('seat'+p);return el?el.value:(seats[p]||'off')});
+  seatsEl.innerHTML=[0,1,2,3].map(p=>'<div class="seat p'+p+'"><label for="seat'+p+'"><span class="avatar"></span>'+esc(NAMES()[p])+'</label><select id="seat'+p+'"><option value="human">'+esc(t('player'))+'</option><option value="cpu">'+esc(t('computer'))+'</option><option value="off">'+esc(t('off'))+'</option></select></div>').join('');
+  [0,1,2,3].forEach(p=>{$('seat'+p).value=cur[p];$('seat'+p).addEventListener('change',checkSeats)});
+}
+function checkSeats(){
+  const n=[0,1,2,3].filter(p=>$('seat'+p).value!=='off').length;
+  $('seatWarn').hidden=n>=2;$('startBtn').disabled=n<2;
+}
+function setSoundBtn(){const b=$('soundBtn');b.textContent=t(muted?'soundOff':'soundOn');b.setAttribute('aria-pressed',String(!muted))}
+function applyLang(){
+  const root=document.documentElement;
+  root.lang=lang;root.dir=lang==='fa'?'rtl':'ltr';
+  document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n)});
+  boardEl.setAttribute('aria-label',t('boardAria'));
+  dieEl.setAttribute('aria-label',t('dieAria'));
+  for(let p=0;p<4;p++)for(let i=0;i<4;i++)pcEls[p][i].setAttribute('aria-label',t('pieceAria',{n:p,a:i+1}));
+  $('langBtn').textContent=lang==='fa'?'EN':'فارسی';
+  setSoundBtn();
+  if(!setupEl.hidden)buildSetup();
+  if(S){updateUI();renderLog();if(S.over&&S.winner!==null)$('winTitle').textContent=t('wins',{n:S.winner})}
+}
+$('langBtn').addEventListener('click',()=>{
+  lang=lang==='fa'?'en':'fa';
+  try{localStorage.setItem('mench.lang',lang)}catch(e){}
+  applyLang();
+});
+$('newBtn').addEventListener('click',()=>{
+  buildSetup();checkSeats();setupEl.hidden=false;
+  if(setupEl.scrollIntoView)setupEl.scrollIntoView({block:'nearest'});
+});
+$('cancelBtn').addEventListener('click',()=>{setupEl.hidden=true});
+$('startBtn').addEventListener('click',()=>{
+  seats=[0,1,2,3].map(p=>{const v=$('seat'+p).value;return v==='off'?null:v});
+  setupEl.hidden=true;newGame();
+});
+$('soundBtn').addEventListener('click',()=>{muted=!muted;setSoundBtn()});
+const shareBtn=$('shareBtn');
+shareBtn.hidden=!SHARE_URL;
+shareBtn.addEventListener('click',()=>{
+  const link='https://t.me/share/url?url='+encodeURIComponent(SHARE_URL)+'&text='+encodeURIComponent(t('shareText'));
+  if(tg&&tg.openTelegramLink)tg.openTelegramLink(link);else window.open(link,'_blank');
+});
+dieEl.addEventListener('click',humanRoll);
+
+/* ---------- start ---------- */
+buildBoard();
+applyLang();
+newGame(load()||undefined);
+})();
+</script>
+</body>
+</html>
