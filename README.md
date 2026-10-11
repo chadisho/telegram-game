@@ -44,15 +44,9 @@ Open the direct link on your phone and check:
 - close the app in the middle of a game and reopen it: the game should continue
 - tap the language button and check the Persian text
 
-## 4. Turn on the invite button (optional)
+## 4. Invite button
 
-Open `index.html`, find this line near the top of the script, and paste your direct link between the quotes:
-
-```js
-const SHARE_URL='';
-```
-
-Upload the file again. The "Invite a friend" button then opens Telegram's share screen with the link.
+The "Invite a friend" button is already set to `https://t.me/See_Earth_bot/Mench`. To change it, edit the `SHARE_URL` line near the top of the script in `index.html`.
 
 ## Notes
 
